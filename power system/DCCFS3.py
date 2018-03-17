@@ -10,6 +10,7 @@ from pypower.case300 import case300
 from pypower.case9 import case9
 from pypower.case14 import case14
 from pypower.case57 import case57
+from pypower.case24_ieee_rts import case24_ieee_rts
 
 def result_sort(basedata,subcasedata):
 	# adjust result branch  keep the same order as before
@@ -17,9 +18,9 @@ def result_sort(basedata,subcasedata):
 	adjust_branch = []
 	adjust_time = []
 	for i in range(0,len(basedata['branch'])):
-		# print( result_branch[k][1]
+
 		for k in range(0,len(subcasedata['branch'])):
-			# print( casedata['branch'][i]
+
 			if subcasedata['branch'][k][0] == basedata['branch'][i][0] and subcasedata['branch'][k][1] == basedata['branch'][i][1]:
 				adjust_time.append(subcasedata['time'][k])
 				adjust_branch.append(subcasedata['branch'][k])
@@ -30,7 +31,6 @@ def result_sort(basedata,subcasedata):
 	subcasedata['branch'] = np.array(adjust_branch)
 
 def CFS_int(casedata):
-	# print( casedata
 	casedata['time'] = branch_time(casedata)
 	if 'areas' in casedata:
 		del casedata['areas']
@@ -39,14 +39,8 @@ def CFS_int(casedata):
 	# result = rundcpf(casedata)
 
 def branch_time(casedata):    # to get time proportity 
-	time = [] # t[0] is accalulate  t[1] is slot add    t[2] is limit   t[3] is state: 0 is out  1 is not
+	time = [] # t[0] is accalulate  t[1] is slot add    t[2] is gap   t[3] is state: 0 is out  1 is not
 	for b in casedata['branch']:
-		# time_temp = []
-		# time_temp.append(0)
-		# time_temp.append(b[5])
-		# time_temp.append(5 * 0.5 * b[5])
-		# time_temp.append(1)
- 	# 	time.append(time_temp)
  		time.append(0)
  	# casedata['time'] = time	
 	return time
@@ -59,6 +53,7 @@ def decide_out(casedata):  # 5s out of limit will dowm  then time-solt is 1s
 		cal_num = 0	
 		for i in range(0,len(casedata['branch'])):
 			if(casedata['branch'][i][5] < abs(casedata['branch'][i][13])):  # this branch is out-of-branch
+				# print(casedata['branch'][i])
 				casedata['time'][i] += (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
 				if casedata['time'][i] >= 5*0.5* casedata['branch'][i][5]:
 					out_num +=1
@@ -80,15 +75,15 @@ def decide_out(casedata):  # 5s out of limit will dowm  then time-solt is 1s
 				slot = (5*0.5* casedata['branch'][i][5] - casedata['time'][i] ) / (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
 				key_index = i
 
-	# print( slot,index,key_index
 	# for t in casedata['time']:  # t[0] is accalulate  t[1] is slot add    t[2] is limit 
 		# t[0] += t[1] * slot
 
 	for i in range(0,len(casedata['branch'])):
 		if(casedata['branch'][i][5] < abs(casedata['branch'][i][13])):
 			casedata['time'][i] += slot* (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
-			# print( casedata['branch'][i]
+			# print(casedata['branch'][i][0],casedata['branch'][i][1],(abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]))/(casedata['branch'][i][5]),casedata['time'][i]/casedata['branch'][i][5])
 	totalslot +=slot
+	# print (casedata['branch'][key_index],'---------------')
 	return key_index , totalslot
 
 def branch_attack(casedata, b_start, b_end):
@@ -100,26 +95,23 @@ def branch_attack(casedata, b_start, b_end):
 			break
 	return 
 
-def random_attack(casedata,allcase):
+def random_attack(r,casedata,allcase):
 
-	r= random.randint(0,len(casedata['branch'])-1)
-	# r = 7
-	# print( r,len(casedata['branch'])
+	# r= random.randint(0,len(casedata['branch'])-1)
+	# print(r,len(casedata['branch']))
 	casedata['branch'] = np.array(np.delete(casedata['branch'],r,0))
 	casedata['time'] = np.delete(casedata['time'],r,0)
 	# return casedata
-
+	# print('random')
 	subbus,subbranch,subtime,subgen = subgraph(casedata)
 
 
 	for i in range(0,len(subbus)):
-		# print( len(subbranch[i])
-		subcasedata = copy.deepcopy(casedata)
-		subcasedata['bus'] = np.array(subbus[i])
-		subcasedata['branch'] = np.array(subbranch[i])
-		subcasedata['time'] = np.array(subtime[i])
-		subcasedata['gen'] = np.array(subgen[i])
-		if len(subgen[i]) != 0:
+		# print(len(subbranch[i]))
+		subcasedata_list = copy.deepcopy(re_dispatch(casedata, subbus[i], subbranch[i], subtime[i], subgen[i], 100000) )# timesolt=1000表示可以瞬间调整
+		# print(len(subcasedata_list))
+		for subcasedata in subcasedata_list:
+			# print(len(subcasedata['gen']))
 			result_sort(casedata,subcasedata)
 			allcase.append(subcasedata)
 			# print( subcasedata['gen']
@@ -147,52 +139,44 @@ def show(casedata):
 
 def CFS(casedata,allcase):
 
+	# print('into-cfs',len(casedata['gen']))
 	result = rundcpf(casedata)
 
 	subcasedata = copy.deepcopy(casedata)
 	subcasedata['bus'] = result[0]['bus']
 	subcasedata['branch'] = result[0]['branch']
 	subcasedata['gen'] = result[0]['gen']
-	# print( casedata['branch']
-	# print( subcasedata['branch']
+
 	result_sort(casedata,subcasedata)
-	# print( len(subcasedata['branch'])
-	# print( subcasedata['branch']
 
 	del_index, timeslot = decide_out(subcasedata)     # timeslot use to caculate adjust of generator
-	
-	# print( del_index,timeslot
+	# print(del_index,timeslot,"------------------")
+	# print( del_index,timeslot)
 	if del_index != -1:  # means exisit branch to delete
 		subcasedata['branch']= np.delete(subcasedata['branch'], del_index, 0)
 		subcasedata['time']= np.delete(subcasedata['time'], del_index, 0)
-		# show(casedata)
-		# print( len(casedata['time']),len(casedata['branch'])
-		# print( casedata['branch']
+
+		# print('cfs',len(subcasedata['gen']))
 		subbus,subbranch,subtime,subgen = subgraph(subcasedata)  # whether generate subgraph 
-		# print( len(subbus)
+		# print(len(subcasedata['branch']), len(subbus),'\n')
 		# if len(subbus)>1: # generate subgraph already
 		for i in range(0,len(subbus)):
-			# print( len(subbranch[i])
-			subcasedata['bus'] = subbus[i]
-			subcasedata['branch'] = subbranch[i]
-			subcasedata['time'] = subtime[i]
-			subcasedata['gen'] = subgen[i]
-			next_subcasedata = copy.deepcopy(re_dispatch(subcasedata, subbus[i], subbranch[i],subtime[i],subgen[i], timeslot))
+			next_subcasedata_list = copy.deepcopy(re_dispatch(subcasedata, subbus[i], subbranch[i],subtime[i],subgen[i], timeslot))
 			# at here gen use to deside whether to run rundcpf
 			# no load or no gen anymore
-			if len(next_subcasedata['gen']) == 0:
+			# print(len(next_subcasedata_list))
+			if len(next_subcasedata_list) == 0:
 				return
-			# print( subbus[i],subbranch[i],subtime[i],subgen[i]
-			# print( casedata['branch']
-			result_sort(casedata,next_subcasedata)
-			# print( next_subcasedata['branch']
-			CFS(next_subcasedata,allcase)
+			for next_subcasedata in next_subcasedata_list:
+				result_sort(casedata,next_subcasedata)
+				CFS(next_subcasedata,allcase)
 	else:
 		allcase.append(subcasedata)
+	# print(len(allcase))
 
 def subgraph(casedata):
+	# print(casedata['gen'])
 	branch = casedata['branch']
-	# print((len(branch))
 	time = casedata['time']
 	bus = casedata['bus']
 	gen = casedata['gen']
@@ -200,14 +184,14 @@ def subgraph(casedata):
 	subbranch = []
 	subtime = []
 	subgen = []
-
 	g=nx.Graph()
 	for b in branch:
 		g.add_edge(b[0],b[1])
 
 	set_subbus = list(nx.connected_components(g))
-	# print( len(set_subbus)
-	# print((set_subbus)
+	# print(set_subbus)
+	# for g in gen:
+	# 	print(g[0])
 	for i in range(0,len(set_subbus)):
             temp_subbus = []
             temp_subbranch = []
@@ -217,11 +201,12 @@ def subgraph(casedata):
                 for b in bus:
                     if s == b[0]:
                         temp_subbus.append(b) 
-                        break
+                        
                 for g in gen:
                     if g[0] == s:
                         temp_gen.append(g)
-                        break       
+                        # print(g)
+                               
             for k in range(0, len(branch)):
                 if (branch[k][0] in set_subbus[i] and branch[k][1] in set_subbus[i]):
                     temp_subbranch.append(branch[k])
@@ -234,21 +219,20 @@ def subgraph(casedata):
             subtime.append(temp_subtime)
             subgen.append(temp_gen)
 
-	# print( len(subbranch)
+            # print('len(temp_gen):',len(temp_gen))
+	# print(len(casedata['gen']),len(subgen))
+	# print( len(subbranch))
 	return subbus,subbranch,subtime,subgen
 
 def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 	# calculate power of generator and load first
 	# adjust input and out put that is gen and bus  
 	# 
-	adjust_rate = 0.3  # per slot
-	adjust_rate*= timeslot
-	subcasedata = copy.deepcopy(casedata)
+	adjust_rate = 100000  # per slot  数字越大 瞬调 0.3可能比较合适
+	adjust_rate *= timeslot
+	
 	if len(gen) == 0:
-		t=[]
-		subcasedata['gen']=np.array(t)  # use gen to control no need condition
-		return subcasedata 
-
+		return []
 	# find power of L
 	# l_bus = []
 	l_sum = 0
@@ -257,171 +241,219 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 
 	# if no load   \\  make sure exist not zero load
 	if l_sum == 0:
-		t=[]
-		subcasedata['gen']=np.array(t)  # use gen to control no need condition
-		return subcasedata
+		return []
 	#find power of G and L bus 
 	g_sum = 0
-	g_up_limit = []
-	g_down_limit = []
+	g_up_gap = []
+	g_down_gap = []
 	g_up_sum = 0
-	g_dowm_sum = 0
+	g_down_sum = 0
 
 	#get the generator propority
 	for g in gen:  #g[0] is number g[1] is output power
+		# print(g)
 		g_sum += g[1]   
-		if g[1]*adjust_rate < g[8]:
-			g_up_limit.append(g[1]*adjust_rate)
-			g_up_sum += g[1]*adjust_rate
+		if g[1]*(1+adjust_rate) < g[8]:
+			g_up_gap.append(g[1]*adjust_rate)
+			g_up_sum += (g[1]*adjust_rate)
 		else:
-			g_up_limit.append(g[8])
-			g_up_sum += g[8]
+			g_up_gap.append(g[8]-g[1])
+			g_up_sum += (g[8]-g[1])
 
 		if g[1]*(1-adjust_rate) > g[9]:
-			g_down_limit.append(g[1]*(1-adjust_rate))
-			g_dowm_sum += g[1]*(1-adjust_rate)
+			g_down_gap.append(g[1]*adjust_rate)
+			g_down_sum += (g[1]*adjust_rate)
 		else:
-			g_down_limit.append(g[9])
-			g_dowm_sum += g[9]
+			g_down_gap.append(g[1]-g[9])
+			g_down_sum += (g[1]-g[9])
+		# print(g_up_sum)
+	# print(g_sum,l_sum,g_down_sum,g_up_sum)
 
-	# print( bus
-	# print( casedata['gen']
+	while True :  # here make sure no any need for out of generator and load 
 
-	# redispatch G and L
-	# first adjust G 
-	while True :  # here make sure no any need for out of generator  
-		isin = False
-		if g_sum > l_sum and g_dowm_sum > l_sum:  # means at high to low but not enough 
-			isin = True
-			index = 0    # the delete the min g first  
-			g_min = 1000
-			for i in range(0,len(gen)):
-				if gen[i][1] < g_min:
-					index = i
-					g_min = gen[i][1]
+		while(True):
+			isin = False
+			if g_sum > l_sum and g_sum-g_down_sum > l_sum:  # means at high to low but not enough  so delete gen
+				isin = True
+				index = 0    # the delete the min g first  
+				g_min = 1000
+				for i in range(0,len(gen)):
+					if gen[i][1] < g_min:
+						index = i
+						g_min = gen[i][1]
 
-			g_delete_num = gen[index][0]
-			# delete the smallest generator
-			g_sum -= gen[index][1]
-			gen = np.delete(gen, index, 0)
-			g_dowm_sum -= g_down_limit[index]
-			g_down_limit = np.delete(g_down_limit, index, 0)
-			g_up_sum -= g_up_limit[index]
-			g_up_limit = np.delete(g_up_limit, index, 0)
+				g_delete_num = gen[index][0]
+				# delete the smallest generator
+				g_sum -= gen[index][1]
+				gen = np.delete(gen, index, 0)
+				g_down_sum -= g_down_gap[index]
+				g_down_gap = np.delete(g_down_gap, index, 0)
+				g_up_sum -= g_up_gap[index]
+				g_up_gap = np.delete(g_up_gap, index, 0)
 
-			# if delete generator  also have to delete branch 
-			for i in range(0,len(bus)):
-				if bus[i][0] == g_delete_num:
-					bus = np.delete(bus,i,0)
-					break 
+				# if delete generator  also have to delete bus and branch 
+				for i in range(0,len(bus)):
+					if bus[i][0] == g_delete_num:
+						l_sum -= bus[i][2]
+						bus = np.delete(bus,i,0)
 
-			branch_delete_list =[]
-			for i in range(0,len(branch)):
-				if branch[i][0] ==g_delete_num or branch[i][1]==g_delete_num:
-					branch_delete_list.append(i)
+				branch_delete_list =[]
+				for i in range(0,len(branch)):
+					if branch[i][0] ==g_delete_num or branch[i][1]==g_delete_num:
+						branch_delete_list.append(i)
 
-			branch = np.delete(branch, branch_delete_list, 0)
-			time = np.delete(time, branch_delete_list, 0)
-			# print( len(branch_delete_list)
-		if isin == False:
+				branch = np.delete(branch, branch_delete_list, 0)
+				time = np.delete(time, branch_delete_list, 0)
+				# print(len(branch_delete_list)
+			if isin == False:
+				break
+
+		while(True):
+			isin = False
+			if g_sum < l_sum and g_sum+g_up_sum < l_sum:  # means at low to high but not enough so delete load 
+				isin = True
+				index = 0
+				l_max = 0 #这就保证 删不到 load = 0的bus
+				for i in range(0,len(bus)):
+					if bus[i][2] >l_max:
+						index = i
+						l_max = bus[i][2] 
+
+				# 看最大的load差值是不是够删除
+				if l_max > l_sum-(g_sum+g_up_sum): # 削减完还是够的
+					bus[index][2]-= l_sum-(g_sum+g_up_sum)
+					l_sum = g_sum+g_up_sum
+
+				else:   #把这个bus处理下
+					# 是gen 不删 不是的话删掉
+					l_sum -= bus[index][2]
+
+					isgen = False
+					for g in gen:
+						if g[0] == bus[index][0]:
+							isgen = True
+					if isgen:
+						bus[index][2] = 0
+						
+					else:  # 删掉 这个bus 那就连带branch删掉
+						l_delete_num = bus[index][0]
+						bus = np.delete(bus,index,0)
+						branch_delete_list =[]
+						for i in range(0,len(branch)):
+							if branch[i][0] ==l_delete_num or branch[i][1]==l_delete_num:
+								branch_delete_list.append(i)
+						branch = np.delete(branch, branch_delete_list, 0)
+						time = np.delete(time, branch_delete_list, 0)
+			if isin == False:
+				break
+		
+		if (g_sum > l_sum and g_sum-g_down_sum > l_sum) or (g_sum < l_sum and g_sum+g_up_sum < l_sum):
+			continue
+		else:
 			break
 
-	# make sure there are some generator
-	if g_sum == 0:  
-		t=[]
-		subcasedata['gen']=np.array(t)  # use gen to control no need condition
-		return subcasedata
+	# print(g_sum,l_sum,g_down_sum,g_up_sum)
 
-	# subdivide into different condition
-	if g_sum > l_sum:	
-		rate = l_sum / g_sum
-		g_sum = 0
-		for i in range(len(gen)):
-			if gen[i][1] * rate < g_down_limit[i]:
-				gen[i][1] = g_down_limit[i]
-			else:
-				gen[i][1] = gen[i][1]*rate
-			g_sum+=gen[i][1]
-	else:
-		rate = l_sum / g_sum
-		g_sum = 0
-		for i in range(len(gen)):
-			if gen[i][1] * rate > g_up_limit[i]:
-				gen[i][1] = g_up_limit[i]
-			else:
-				gen[i][1] = gen[i][1]*rate
-			g_sum+=gen[i][1]
+	temp_gen_sum = g_sum
+	if g_sum > l_sum: # g 大的
+		if (g_sum-g_down_sum)<=l_sum: # 降低gen 可调 
+			for i in range(0,len(gen)):
+				gen[i][1] -= ((temp_gen_sum-l_sum)/g_down_sum)*g_down_gap[i]
+				g_sum -=((temp_gen_sum-l_sum)/g_down_sum)*g_down_gap[i]
+				# print(g_sum)
+		else:	
+			# 删 gen 降幅不够 前面删过了
+			pass
 
+	else: # g 小的
+		if (g_sum+g_up_sum)>=l_sum: # 提高gen 可调 
+			for i in range(0,len(gen)):
+				gen[i][1] += ((l_sum-temp_gen_sum)/g_up_sum)*g_up_gap[i]
+				g_sum += ((l_sum-temp_gen_sum)/g_up_sum)*g_up_gap[i]
+		else:
+			#不可调 删掉load 前面删掉了
+			pass 
+
+	
 	# if no load or no generator then just return
 	if g_sum ==0 or l_sum ==0:
-		t=[]
-		subcasedata['gen']=np.array(t)  # use gen to control no need condition
-		return subcasedata
-
-	# if adjust G not enough the adjust L
-	if g_sum != l_sum:
-		rate = g_sum / l_sum
-		for b in bus:
-			b[2] *= rate
-
+		return []
+	
+	subcasedata = copy.deepcopy(casedata)
 	subcasedata['bus'] = np.array(bus) 
 	subcasedata['gen'] = np.array(gen)
 	subcasedata['time'] = time
 	subcasedata['branch'] = np.array(branch)
+	# print('redispatch')
+	subbus,subbranch,subtime,subgen = subgraph(subcasedata)
+
+	# print(subgen)
+	# print(len(branch),len(subbranch))
+	subcasedata_list =[]
+	for i in range(0,len(subbus)):
+		subcasedata = copy.deepcopy(casedata)
+		subcasedata['bus'] = np.array(subbus[i]) 
+		subcasedata['gen'] = np.array(subgen[i])
+		subcasedata['time'] = time
+		subcasedata['branch'] = np.array(subbranch[i])
+		subcasedata_list.append(subcasedata)
+		# print(subgen[i])
+
 	# print( subcasedata['gen']
-	return subcasedata
+	# print(g_sum,l_sum)
+	# print(len(subcasedata_list))
+	return subcasedata_list
+
+def get_branch_num(allcase):
+	num = 0
+	for a in allcase:
+		num+=len(a['branch'])
+	return num
 
 if __name__ == '__main__':
 
-	# casedata = case9()
-	# allcase =[]
-	# k = np.delete(casedata['branch'],[0,6],0)
-	# casedata['branch'] = k
-	# k = np.delete(casedata['bus'],[0,1],0)
-	# casedata['bus'] = k
-	# k = np.delete(casedata['gen'],[0,1],0)
-	# casedata['gen'] = k
-	# CFS_int(casedata)
-	# show (casedata)
-	# print( casedata['gen'].shape[1]
-	# print( casedata['gen']
-	# CFS(casedata,allcase)
-	# print( casedata
-	# print( casedata['branch']
-	# print( len(allcase)
-	# print(("aaa")
-	casedata = case9()
-	# print( casedata
+	casedata = case24_ieee_rts()
 	CFS_int(casedata)
-	# print( len(casedata['branch'])
-	allcase = []
-	allcase.append(casedata)
-	for i in range(0,20):
-		ra = random.randint(0,len(allcase)-1)
-		at_casedata = allcase[ra]
-		# print( len(allcase),ra 
-		# print( allcase
-		allcase.remove(at_casedata)
 
+	n = len(casedata['branch'])
+	c=0
+	# print (n)
+# ----------------------------------------------
+	for i in range(0,n):
+
+		testdata = copy.deepcopy(casedata)
+		allcase = []
 		temp_allcase = []
-
-		random_attack(at_casedata, allcase)
-		# print( len(allcase)
+		random_attack(i,testdata, allcase)
+		# print( len(allcase))
 		for a in allcase:
+			# print(len(a['gen']))
 			CFS(a,temp_allcase)
 		allcase = copy.deepcopy(temp_allcase)
-		# print( temp_allcase
-		sum = 0
-		for i in range (0,len(allcase)):
-			sum += len(allcase[i]['branch'])
-			# pass
-		print( sum)
-		if len(allcase) == 0:
-			break
-		# print( len(get_allcase) )
 
-	# print( len(get_allcase)
-	# for i in range (0,len(get_allcase)):
-	# 	print( i,': ',get_allcase[i]['gen']
+		# print("len(allcase): ",len(allcase))
+		# if len(allcase)!= 1:
+		# 	print(i,len(allcase))
+		# else:
+		# 	if len(allcase[0]['branch'])==38:
+		# 		print(i,'b')
+		if len(allcase)!= 1:
+			c+=1
+			# print(casedata['branch'][i])
+			# break
+		print(get_branch_num(allcase))
+	print(c)
 
-	# print(  get_allcase[1]['bus'],get_allcase[0]['bus']
+# -----------------------------------------------
+	# testdata = copy.deepcopy(casedata)
+	# allcase = []
+	# temp_allcase = []
+	# random_attack(8,testdata, allcase)  # 8 11 12
+	# # print( len(allcase))
+	# for a in allcase:
+	# 	CFS(a,temp_allcase)
+	# allcase = copy.deepcopy(temp_allcase)
+	# # print(len(allcase))
+
+
+	# print(round(2.888,0))

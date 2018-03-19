@@ -46,48 +46,35 @@ def branch_time(casedata):    # to get time proportity
 	return time
 
 def decide_out(casedata):  # 5s out of limit will dowm  then time-solt is 1s
-	totalslot = 0
-	out_num = 0
-
-	while(True):
-		# print('is in decide_out?')
-		cal_num = 0	
-		for i in range(0,len(casedata['branch'])):
-			if(round(casedata['branch'][i][5],2) < round(abs(casedata['branch'][i][13]),2)):  # this branch is out-of-branch
-				# print(casedata['branch'][i])
-				cal_num -=1
-				casedata['time'][i] += (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
-				if casedata['time'][i] >= 5*0.5* casedata['branch'][i][5]:
-					out_num +=1
-				# print (casedata['time'][i], 5*0.5* casedata['branch'][i][5],casedata['branch'][i][5],abs(casedata['branch'][i][13]))
-			cal_num += 1
-		if cal_num == len(casedata['branch']):
-			return -1, 0
-		if out_num > 0:
-			break
-		totalslot += 1
-		# print (cal_num,len(casedata['branch']))
-	# print('not in decide_out')
-	slot = 2 
-	index = 0
-	key_index = index
-	for i in range(0,len(casedata['branch'])):#find min solt and key_index
-		if(round(casedata['branch'][i][5],2) < round(abs(casedata['branch'][i][13]),2)):  # this branch is out-of-branch
-			casedata['time'][i] -= (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
-			if slot > (5*0.5* casedata['branch'][i][5] - casedata['time'][i] ) / (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) ):
-				slot = (5*0.5* casedata['branch'][i][5] - casedata['time'][i] ) / (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
-				key_index = i
-
-	# for t in casedata['time']:  # t[0] is accalulate  t[1] is slot add    t[2] is limit 
-		# t[0] += t[1] * slot
-
+	out_slot = []
+	no_overload =True
+	del_index = 0
+	minsolt = 100000
+	# print(casedata['time'])
 	for i in range(0,len(casedata['branch'])):
-		if(casedata['branch'][i][5] < abs(casedata['branch'][i][13])):
-			casedata['time'][i] += slot* (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
-			# print(casedata['branch'][i][0],casedata['branch'][i][1],(abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]))/(casedata['branch'][i][5]),casedata['time'][i]/casedata['branch'][i][5])
-	totalslot +=slot
-	# print (casedata['branch'][key_index],'---------------')
-	return key_index , totalslot
+
+		if(round(casedata['branch'][i][5],2) < round(abs(casedata['branch'][i][13]),2)):  # this branch is out-of-branch
+			# if overload , calculate the slot : ( 5*0.5*limit - already accumulate ) / gap of out 
+			no_overload=False
+			temp_slot = ((5*0.5*casedata['branch'][i][5])-casedata['time'][i])/(abs(casedata['branch'][i][13])-abs(casedata['branch'][i][5])) 
+			out_slot.append(temp_slot) 
+			# if i == 20:
+			# 	print((5*0.5*casedata['branch'][i][5]),casedata['time'][i],(abs(casedata['branch'][i][13])-abs(casedata['branch'][i][5])))
+			if temp_slot < minsolt:
+				minsolt = temp_slot
+				del_index = i
+		else:
+			out_slot.append(-1)
+
+	if no_overload:
+		return -1,0
+	# print("out_slot:",out_slot)
+	for i in range(0,len(casedata['branch'])):
+		if(round(casedata['branch'][i][5],2) < round(abs(casedata['branch'][i][13]),2)):  # this branch is out-of-branch
+			casedata['time'][i] += minsolt* (abs(casedata['branch'][i][13])-abs(casedata['branch'][i][5]))
+	# print (5*0.5*casedata['branch'][del_index][5],'---------------',abs(casedata['branch'][del_index][13])-casedata['branch'][del_index][5])
+	# print('after:',casedata['time'])
+	return del_index , minsolt
 
 def branch_attack(casedata, b_start, b_end):
 	for i in range(0,len(casedata['branch'])):
@@ -143,7 +130,9 @@ def show(casedata):
 def CFS(casedata,allcase):
 
 	# print('into-cfs',len(casedata['gen']))
+
 	result = rundcpf(casedata)
+	
 
 	subcasedata = copy.deepcopy(casedata)
 	subcasedata['bus'] = result[0]['bus']
@@ -152,9 +141,12 @@ def CFS(casedata,allcase):
 
 	result_sort(casedata,subcasedata)
 
+	# print("len(subcasedata['branch'] in CFS:",len(subcasedata['branch']))
+
 	del_index, timeslot = decide_out(subcasedata)     # timeslot use to caculate adjust of generator
 	# print(del_index,timeslot,"------------------")
 	# print( del_index,timeslot)
+	# print('del_index:',del_index)
 	if del_index != -1:  # means exisit branch to delete
 		subcasedata['branch']= np.delete(subcasedata['branch'], del_index, 0)
 		subcasedata['time']= np.delete(subcasedata['time'], del_index, 0)
@@ -437,35 +429,51 @@ if __name__ == '__main__':
 	c=0
 	# print (n)
 # ----------------------------------------------
-	for i in range(0,n):
-		testdata = copy.deepcopy(casedata)
-		allcase = []
+	# for i in range(0,n):
+	# 	testdata = copy.deepcopy(casedata)
+	# 	allcase = []
 		
-		temp_allcase = []
-		random_attack(i,testdata, allcase)
+	# 	temp_allcase = []
+	# 	random_attack(i,testdata, allcase)
 			
-		for a in allcase:
+	# 	for a in allcase:
 				
-			CFS(a,temp_allcase)
-		allcase = copy.deepcopy(temp_allcase)
+	# 		CFS(a,temp_allcase)
+	# 	allcase = copy.deepcopy(temp_allcase)
 
-		if len(allcase)!= 1:
-			c+=1
-			# print(casedata['branch'][i])
-			# break
-		print(get_branch_num(allcase))
-	print(c)
+	# 	if len(allcase)!= 1:
+	# 		c+=1
+	# 		# print(casedata['branch'][i])
+	# 		# break
+	# 	print(get_branch_num(allcase))
+	# print(c)
 
 # -----------------------------------------------
-	# testdata = copy.deepcopy(casedata)
-	# allcase = []
-	# temp_allcase = []
-	# random_attack(8,testdata, allcase)  # 8 11 12
-	# # print( len(allcase))
-	# for a in allcase:
-	# 	CFS(a,temp_allcase)
-	# allcase = copy.deepcopy(temp_allcase)
-	# # print(len(allcase))
+	testdata = copy.deepcopy(casedata)
+	allcase = []
+	temp_allcase = []
+	random_attack(26,testdata, allcase)  # 8 11 12
+	# print( len(allcase))
+	for a in allcase:
+		CFS(a,temp_allcase)
+	allcase = copy.deepcopy(temp_allcase)
+	# print(len(allcase))
 
+	t =allcase[0]
+	# print(len(t['branch']))
+	allcase= [] 
+	temp_allcase =[]
+	random_attack(21,t,allcase)
+	for a in allcase:
+		CFS(a,temp_allcase)
+	allcase = copy.deepcopy(temp_allcase)
+
+	# print(len(allcase))
+
+	num = 0
+	for a in temp_allcase:
+		num += len(a['branch'])
+		# print(len(a['branch']))
+	print (38-num)
 
 	# print(round(2.888,0))

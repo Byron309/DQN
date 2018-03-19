@@ -50,26 +50,29 @@ def decide_out(casedata):  # 5s out of limit will dowm  then time-solt is 1s
 	out_num = 0
 
 	while(True):
+		# print('is in decide_out?')
 		cal_num = 0	
 		for i in range(0,len(casedata['branch'])):
-			if(casedata['branch'][i][5] < abs(casedata['branch'][i][13])):  # this branch is out-of-branch
+			if(round(casedata['branch'][i][5],2) < round(abs(casedata['branch'][i][13]),2)):  # this branch is out-of-branch
 				# print(casedata['branch'][i])
+				cal_num -=1
 				casedata['time'][i] += (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
 				if casedata['time'][i] >= 5*0.5* casedata['branch'][i][5]:
 					out_num +=1
-				cal_num -=1
+				# print (casedata['time'][i], 5*0.5* casedata['branch'][i][5],casedata['branch'][i][5],abs(casedata['branch'][i][13]))
 			cal_num += 1
 		if cal_num == len(casedata['branch']):
 			return -1, 0
 		if out_num > 0:
 			break
 		totalslot += 1
-
+		# print (cal_num,len(casedata['branch']))
+	# print('not in decide_out')
 	slot = 2 
 	index = 0
 	key_index = index
 	for i in range(0,len(casedata['branch'])):#find min solt and key_index
-		if(casedata['branch'][i][5] < abs(casedata['branch'][i][13])):  # this branch is out-of-branch
+		if(round(casedata['branch'][i][5],2) < round(abs(casedata['branch'][i][13]),2)):  # this branch is out-of-branch
 			casedata['time'][i] -= (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
 			if slot > (5*0.5* casedata['branch'][i][5] - casedata['time'][i] ) / (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) ):
 				slot = (5*0.5* casedata['branch'][i][5] - casedata['time'][i] ) / (abs(casedata['branch'][i][13]) - abs(casedata['branch'][i][5]) )
@@ -270,11 +273,14 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 	# print(g_sum,l_sum,g_down_sum,g_up_sum)
 
 	while True :  # here make sure no any need for out of generator and load 
-
+		# print( 'is here dead?')
 		while(True):
-			isin = False
-			if g_sum > l_sum and g_sum-g_down_sum > l_sum:  # means at high to low but not enough  so delete gen
-				isin = True
+			# print('at first dead?')
+			# isin = False
+			# g_sum=round(g_sum,2)
+			# l_sum=round(l_sum,2)
+			if round(g_sum,2) > round(l_sum,2) and g_sum-g_down_sum > l_sum:  # means at high to low but not enough  so delete gen
+				# isin = True
 				index = 0    # the delete the min g first  
 				g_min = 1000
 				for i in range(0,len(gen)):
@@ -292,10 +298,13 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 				g_up_gap = np.delete(g_up_gap, index, 0)
 
 				# if delete generator  also have to delete bus and branch 
+				# print ('redispatch')
+				bus_delete_list =[]
 				for i in range(0,len(bus)):
 					if bus[i][0] == g_delete_num:
 						l_sum -= bus[i][2]
-						bus = np.delete(bus,i,0)
+						bus_delete_list.append(i)
+				bus = np.delete(bus,bus_delete_list,0)
 
 				branch_delete_list =[]
 				for i in range(0,len(branch)):
@@ -305,13 +314,18 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 				branch = np.delete(branch, branch_delete_list, 0)
 				time = np.delete(time, branch_delete_list, 0)
 				# print(len(branch_delete_list)
-			if isin == False:
+			# if isin == False:
+			# 	break
+			else:
 				break
-
 		while(True):
-			isin = False
-			if g_sum < l_sum and g_sum+g_up_sum < l_sum:  # means at low to high but not enough so delete load 
-				isin = True
+			# print('at second dead?',l_sum,g_sum,g_down_sum,g_up_sum)
+			# isin = False
+			# g_sum=round(g_sum,2)
+			# l_sum=round(l_sum,2)
+			if round(g_sum,2) < round(l_sum,2) and g_sum+g_up_sum < l_sum:  # means at low to high but not enough so delete load 
+				# print('Am I in?')
+				# isin = True
 				index = 0
 				l_max = 0 #这就保证 删不到 load = 0的bus
 				for i in range(0,len(bus)):
@@ -326,6 +340,8 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 
 				else:   #把这个bus处理下
 					# 是gen 不删 不是的话删掉
+					if len(bus) ==0:
+						print(l_sum,g_sum,g_down_sum,g_up_sum)
 					l_sum -= bus[index][2]
 
 					isgen = False
@@ -344,10 +360,12 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 								branch_delete_list.append(i)
 						branch = np.delete(branch, branch_delete_list, 0)
 						time = np.delete(time, branch_delete_list, 0)
-			if isin == False:
+			else:
 				break
+			# if isin == False:
+			# 	break
 		
-		if (g_sum > l_sum and g_sum-g_down_sum > l_sum) or (g_sum < l_sum and g_sum+g_up_sum < l_sum):
+		if (round(g_sum,2) > round(l_sum,2) and g_sum-g_down_sum > l_sum) or (round(g_sum,2) < round(l_sum,2) and g_sum+g_up_sum < l_sum):
 			continue
 		else:
 			break
@@ -365,7 +383,7 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 			# 删 gen 降幅不够 前面删过了
 			pass
 
-	else: # g 小的
+	elif g_sum < l_sum: # g 小的
 		if (g_sum+g_up_sum)>=l_sum: # 提高gen 可调 
 			for i in range(0,len(gen)):
 				gen[i][1] += ((l_sum-temp_gen_sum)/g_up_sum)*g_up_gap[i]
@@ -420,23 +438,17 @@ if __name__ == '__main__':
 	# print (n)
 # ----------------------------------------------
 	for i in range(0,n):
-
 		testdata = copy.deepcopy(casedata)
 		allcase = []
+		
 		temp_allcase = []
 		random_attack(i,testdata, allcase)
-		# print( len(allcase))
+			
 		for a in allcase:
-			# print(len(a['gen']))
+				
 			CFS(a,temp_allcase)
 		allcase = copy.deepcopy(temp_allcase)
 
-		# print("len(allcase): ",len(allcase))
-		# if len(allcase)!= 1:
-		# 	print(i,len(allcase))
-		# else:
-		# 	if len(allcase[0]['branch'])==38:
-		# 		print(i,'b')
 		if len(allcase)!= 1:
 			c+=1
 			# print(casedata['branch'][i])

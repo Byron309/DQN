@@ -187,9 +187,15 @@ def replace_string(str,index,c):
 		re+=str[i]
 	return re
 
-def ql(basedata, threshold, trials):
+def ql(basedata, threshold, trials, first_trials_Q,first_trials_blackout,second_trials_Q,second_trials_blackout, cal_exp):
 	#basedata means donot change, threshold is blacksize's threshold that cannot recover
 	# trials mean total trials, k is the number of attack sequence
+
+	temp_first_trials_Q = []
+	temp_first_trials_blackout = []
+	temp_second_trials_Q =[]
+	temp_second_trials_blackout= []
+
 	Q_value={}
 	store_total_num = []
 	alf=0.1
@@ -212,8 +218,8 @@ def ql(basedata, threshold, trials):
 			# print ("\nblackout_size:",blackout_size)
 			if blackout_size>=threshold:
 				# print('--------------------------------------','\n'
-				print ("\nblackout_size:",blackout_size)
-				print('total_attack_num:',total_attack_num)
+				# print ("\nblackout_size:",blackout_size)
+				# print('total_attack_num:',total_attack_num)
 				
 				store_total_num.append(total_attack_num)
 				total_attack_num = 0
@@ -283,14 +289,36 @@ def ql(basedata, threshold, trials):
 			# if reward == -1:
 			# 	print(Q_value[state_string][choose_to_attack])
 
+
+			# store 
+			if total_attack_num == 1:
+				temp_first_trials_Q.append(Q_value[state_string][choose_to_attack])
+				temp_first_trials_blackout.append(blackout_size)
+			if total_attack_num == 2:
+				temp_second_trials_Q.append(Q_value[state_string][choose_to_attack])
+				temp_second_trials_blackout.append(blackout_size)
+
+			# into next state
 			state_string = next_string
 
-			pro-=sub_pro
-			if pro<pro_down:
-				pro=pro_down
-			# print('pro:',pro)
-	# plt.plot(store_total_num)
-	# plt.show()
+		pro-=sub_pro
+		if pro<pro_down:
+			pro=pro_down
+	# print(cal_exp)
+	if cal_exp ==0:
+		for i in range(0,len(temp_first_trials_Q)):
+			first_trials_Q.append(temp_first_trials_Q[i]) 
+			first_trials_blackout.append(temp_first_trials_blackout[i]) 
+			second_trials_Q.append(temp_second_trials_Q[i]) 
+			second_trials_blackout.append(temp_second_trials_blackout[i]) 
+		# print(len(first_trials_Q))
+	else:
+		for i in range(0,len(first_trials_Q)):
+			first_trials_Q[i] = (first_trials_Q[i]*cal_exp + temp_first_trials_Q[i]) / (cal_exp+1)
+			first_trials_blackout[i] = (first_trials_blackout[i]*cal_exp + temp_first_trials_blackout[i]) / (cal_exp+1)
+			second_trials_Q[i] = (second_trials_Q[i]*cal_exp + temp_second_trials_Q[i]) / (cal_exp+1)
+			second_trials_blackout[i] = (second_trials_blackout[i]*cal_exp + temp_second_trials_blackout[i]) / (cal_exp+1)
+			# print(len(first_trials_Q))
 	return Q_value
 
 if __name__ == '__main__':
@@ -298,11 +326,17 @@ if __name__ == '__main__':
 	basedata=case24_ieee_rts()
 	DCCFS3.CFS_int(basedata)
 	threshold = 8
-	
-	experiment = 1
+
+	first_trials_Q = []
+	second_trials_Q =[]
+	first_trials_blackout = []
+	second_trials_blackout= []
+
+	experiment = 20
 	for i in range(0,experiment):
-		trials = 200
-		Q_value=ql(basedata,threshold,trials)
+		
+		trials = 1000
+		Q_value=ql(basedata,threshold,trials,first_trials_Q,first_trials_blackout,second_trials_Q,second_trials_blackout,i)
 		max_state_string = None
 		max_Q = -1
 		max_in_state_action = None
@@ -315,5 +349,27 @@ if __name__ == '__main__':
 					max_in_state_action = choose_to_attack
 					# pass
 		print(max_Q,max_state_string,max_in_state_action)
-	# 1.8912720364319122 11111111111111111111111111111111111111 6
-	# 1.8929303495098488 11111111111111111111111111111111111111 26
+
+	plt.figure()
+
+	plt.subplot(221)
+	plt.plot(first_trials_Q)
+	plt.title("first_trials_Q")
+	plt.grid(True)
+
+	plt.subplot(222)
+	plt.plot(second_trials_Q)
+	plt.title("second_trials_Q")
+	plt.grid(True)
+
+	plt.subplot(223)
+	plt.plot(first_trials_blackout)
+	plt.title("first_trials_blackout")
+	plt.grid(True)
+
+	plt.subplot(224)
+	plt.plot(second_trials_blackout)
+	plt.title("second_trials_blackout")
+	plt.grid(True)
+
+	plt.show()

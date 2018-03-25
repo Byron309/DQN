@@ -205,6 +205,7 @@ def ql(basedata, threshold, trials, first_trials_Q,first_trials_blackout,second_
 	pro_down=0.005
 	sub_pro=0.005
 	for cur_trials in range(0,trials):
+		print('cur_trials:',cur_trials)
 		# initialize
 		blackout_size=0 
 		state = copy.deepcopy(basedata)
@@ -294,9 +295,13 @@ def ql(basedata, threshold, trials, first_trials_Q,first_trials_blackout,second_
 			if total_attack_num == 1:
 				temp_first_trials_Q.append(Q_value[state_string][choose_to_attack])
 				temp_first_trials_blackout.append(blackout_size)
-			if total_attack_num == 2:
-				temp_second_trials_Q.append(Q_value[state_string][choose_to_attack])
-				temp_second_trials_blackout.append(blackout_size)
+
+			# if blackout_size>=threshold:
+			# 	temp_second_trials_Q.append(0)
+			# 	temp_second_trials_blackout.append(0)
+			# else:
+			# 	temp_second_trials_Q.append(Q_value[state_string][choose_to_attack])
+			# 	temp_second_trials_blackout.append(blackout_size)
 
 			# into next state
 			state_string = next_string
@@ -309,30 +314,30 @@ def ql(basedata, threshold, trials, first_trials_Q,first_trials_blackout,second_
 		for i in range(0,len(temp_first_trials_Q)):
 			first_trials_Q.append(temp_first_trials_Q[i]) 
 			first_trials_blackout.append(temp_first_trials_blackout[i]) 
-			second_trials_Q.append(temp_second_trials_Q[i]) 
-			second_trials_blackout.append(temp_second_trials_blackout[i]) 
+			# second_trials_Q.append(temp_second_trials_Q[i]) 
+			# second_trials_blackout.append(temp_second_trials_blackout[i]) 
 		# print(len(first_trials_Q))
 	else:
 		for i in range(0,len(first_trials_Q)):
 			first_trials_Q[i] = (first_trials_Q[i]*cal_exp + temp_first_trials_Q[i]) / (cal_exp+1)
 			first_trials_blackout[i] = (first_trials_blackout[i]*cal_exp + temp_first_trials_blackout[i]) / (cal_exp+1)
-			second_trials_Q[i] = (second_trials_Q[i]*cal_exp + temp_second_trials_Q[i]) / (cal_exp+1)
-			second_trials_blackout[i] = (second_trials_blackout[i]*cal_exp + temp_second_trials_blackout[i]) / (cal_exp+1)
+			# second_trials_Q[i] = (second_trials_Q[i]*cal_exp + temp_second_trials_Q[i]) / (cal_exp+1)
+			# second_trials_blackout[i] = (second_trials_blackout[i]*cal_exp + temp_second_trials_blackout[i]) / (cal_exp+1)
 			# print(len(first_trials_Q))
 	return Q_value
 
 if __name__ == '__main__':
 
-	basedata=case24_ieee_rts()
+	basedata=case300()
 	DCCFS3.CFS_int(basedata)
-	threshold = 8
+	threshold = 24  # 8 11
 
 	first_trials_Q = []
 	second_trials_Q =[]
 	first_trials_blackout = []
 	second_trials_blackout= []
 
-	experiment = 20
+	experiment = 100
 	for i in range(0,experiment):
 		
 		trials = 1000
@@ -352,24 +357,18 @@ if __name__ == '__main__':
 
 	plt.figure()
 
-	plt.subplot(221)
-	plt.plot(first_trials_Q)
-	plt.title("first_trials_Q")
+	plt.subplot(211)
+	plt.plot(first_trials_Q,label = 'first_trials_Q')
+	plt.plot(second_trials_Q,label = 'second_trials_Q')
+	plt.title("trials_Q")
+	plt.legend()
 	plt.grid(True)
 
-	plt.subplot(222)
-	plt.plot(second_trials_Q)
-	plt.title("second_trials_Q")
+	plt.subplot(212)
+	plt.plot(first_trials_blackout,label = 'first_trials_blackout')
+	plt.plot(second_trials_blackout, label = 'second_trials_blackout')
+	plt.title("trials_blackout")
 	plt.grid(True)
 
-	plt.subplot(223)
-	plt.plot(first_trials_blackout)
-	plt.title("first_trials_blackout")
-	plt.grid(True)
-
-	plt.subplot(224)
-	plt.plot(second_trials_blackout)
-	plt.title("second_trials_blackout")
-	plt.grid(True)
-
+	plt.legend()
 	plt.show()

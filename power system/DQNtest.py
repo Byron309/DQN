@@ -1,6 +1,7 @@
 #-*- coding: UTF-8 -*- 
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 from collections import deque
 import random
 import networkx as nx
@@ -12,7 +13,9 @@ from pypower.case9 import case9
 from pypower.case14 import case14
 from pypower.case57 import case57
 from pypower.case24_ieee_rts import case24_ieee_rts
+from pypower.case118_C import case118
 import DCCFS3 as dc
+
 
 class DeepQNetwork:
 
@@ -28,8 +31,14 @@ class DeepQNetwork:
     # 训练之前观察多少步。
     OBSERVE = 1000.
 
+    # 训练多少步后停止
+    STOP = 10000
+
+    # 阈值
+    threshold = 5 # 8 11
+
     # 选取的小批量训练样本数。
-    BATCH = 100
+    BATCH = 200
 
     # epsilon 的最小值，当 epsilon 小于该值时，将不在随机选择行为。
     FINAL_EPSILON = 0.0001
@@ -231,7 +240,7 @@ class DeepQNetwork:
         self.memory_counter += 1
 
     def convert_statelist_to_staterun(self, basecase,state_list):
-
+        # print('in convert_statelist_to_staterun:',state_list)
         # get four attributes
         branch = basecase['branch']
         time = basecase['time']
@@ -258,11 +267,11 @@ class DeepQNetwork:
                 for b in bus:
                     if s == b[0]:
                         temp_subbus.append(b) 
-                        break
+                        
                 for g in gen:
                     if g[0] == s:
                         temp_gen.append(g)
-                        break       
+                               
             for k in range(0, len(branch)):
                 if (branch[k][0] in set_subbus[i] and branch[k][1] in set_subbus[i]):
                     temp_subbranch.append(branch[k])
@@ -277,17 +286,32 @@ class DeepQNetwork:
 
         return subbus,subbranch,subtime,subgen
 
-    def convert_staterun_to_statelist(self, basecase,allcase):
+    def convert_staterun_to_statelist(self, basecase,allcase,now_state_list):
         state_list=[]
         branch=[]
         for a in allcase:
             for b in a['branch']:
                 branch.append(b)
-        for b in basecase['branch']:
-            if b in branch:
+        # print('in convert_staterun_to_statelist:',now_state_list)
+        # for i in range(0,len(basecase['branch'])):
+            # if attack_num == i:
+            #     continue
+            # for k in branch
+
+        for i in range(0,len(basecase['branch'])):
+            if now_state_list[i] == 0:
+                state_list.append(0)
+                continue
+            isin = False
+            for k in branch:
+                if b[0]==k[0] and b[1]==k[1]:
+                    isin = True
+                    break
+            if isin:
                 state_list.append(1)
             else:
                 state_list.append(0)
+            # print(isin)
         return state_list
 
 #------------------------------------------------------------------
@@ -301,25 +325,26 @@ class DeepQNetwork:
     #     pass
 #------------------------------------------------------------------
     def get_blackout_size(self, state_list):
+        # print(state_list)
         blackout_size = 0
         for i in state_list:
             if i == 0:
                 blackout_size+=1
-
+        # print(blackout_size)
         return blackout_size
 
-    def get_reward(self,blackout_size, threshold, attack_num):
+    def get_reward(self, blackout_size, attack_num):
         r=0 
-        if blackout_size>=threshold and attack_num<threshold:
+        if blackout_size>=self.threshold and attack_num<self.threshold:
             r=1
-        if blackout_size>=threshold and attack_num>=threshold:
+        if blackout_size>=self.threshold and attack_num>=self.threshold:
             r=-1
         
         # if r==1:
             # print r
         return r
 
-    def step(self, basecase, state_list, action, threshold, attack_num ):
+    def step(self, basecase, state_list, action, attack_num ):
         """
         执行动作。
         :param state: 当前状态。
@@ -339,30 +364,29 @@ class DeepQNetwork:
             subcasedata['time'] = subtime[i]
             subcasedata['gen'] = subgen[i]
             # print(subcasedata)
-            next_subcasedata = copy.deepcopy(dc.re_dispatch(subcasedata, subbus[i], subbranch[i],subtime[i],subgen[i], 1000))
+            next_subcasedata_list = copy.deepcopy(dc.re_dispatch(subcasedata, subbus[i], subbranch[i],subtime[i],subgen[i], 100000))
             # at here gen use to deside whether to run rundcpf
             # no load or no gen anymore
-            if len(next_subcasedata['gen']) == 0:
-                # print (next_subcasedata)
-                next_state_list = current_state_list = [0]*self.action_num
-                reward = self.get_reward(self.state_num, threshold, attack_num)
+            if len(next_subcasedata_list) == 0:
+                next_state_list = [0]*self.action_num                
+                reward = self.get_reward(self.state_num, attack_num)
                 done = True
                 return next_state_list,reward, done
-            # print( subbus[i],subbranch[i],subtime[i],subgen[i]
-            # print( casedata['branch']
-            dc.result_sort(basecase,next_subcasedata)
-            # print( next_subcasedata['branch']
-            # print(next_state)
-            dc.CFS(next_subcasedata,allcase)
 
-        next_state_list = self.convert_staterun_to_statelist(basecase,allcase)
+            for next_subcasedata in next_subcasedata_list:
+                dc.result_sort(basecase,next_subcasedata)
+                # print( next_subcasedata['branch']
+                # print(next_state)
+                dc.CFS(next_subcasedata,allcase)
+
+        next_state_list = self.convert_staterun_to_statelist(basecase,allcase,state_list)
         blackout_size = self.get_blackout_size(next_state_list)
-        reward = self.get_reward(blackout_size,threshold,attack_num)
+        reward = self.get_reward(blackout_size,attack_num)
         
         
         # 到达阈值终止
         done =False
-        if blackout_size>=threshold:
+        if blackout_size>=self.threshold:
             done = True
         
         return next_state_list, reward, done
@@ -447,7 +471,7 @@ class DeepQNetwork:
         :return:
         """
 
-        threshold = 4
+        # self.threshold = 5 # 8 11
         # k = 2
 
         # 初始化当前状态。
@@ -469,7 +493,7 @@ class DeepQNetwork:
             # print(action)
             # 执行动作，得到：下一个状态，执行动作的得分，是否结束。
             
-            next_state_list, reward, done = self.step(basecase, current_state_list, action, threshold, attack_num)
+            next_state_list, reward, done = self.step(basecase, current_state_list, action, attack_num)
 
             # 保存记忆。
             action_list = [0]*self.action_num
@@ -480,7 +504,7 @@ class DeepQNetwork:
             if self.step_index > self.OBSERVE:
                 self.experience_replay()
 
-            if self.step_index > 10000:
+            if self.step_index > self.STOP:
                 break
 
             if done:
@@ -491,16 +515,17 @@ class DeepQNetwork:
                 current_state_list = next_state_list
 
             self.step_index += 1
-            # if self.step_index %1000 ==0:
-            #     print(self.step_index)
-                # print(self.session.run(self.w1))
-            # if self.step_index >3700 :
-            #     print (self.step_index)
-        path = 'D:\\Code\\DC\\DQN\\network\\case9-1\\'
+            
+        # path = 'D:\\Code\\DC\\DQN\\network\\case24_ieee_rts\\'
+        # save_path = self.save_network(path)
+        # print(save_path)
+        path = 'D:\\Code\\DC\\DQN\\network\\case9\\'
         save_path = self.save_network(path)
         print(save_path)
 
+
 if __name__ == "__main__":
+    # basecase =case24_ieee_rts()
     basecase = case9()
     dc.CFS_int(basecase)
 
@@ -509,3 +534,9 @@ if __name__ == "__main__":
     # print(q_network.q_target)
     q_network.train(basecase)
     # print(q_network.q_target)
+    # print(q_network.cost_his)
+    plt.plot(q_network.cost_his)
+    plt.show()
+
+    #314 315.0 284 256
+    # pass

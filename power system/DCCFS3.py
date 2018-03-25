@@ -15,12 +15,11 @@ from pypower.case24_ieee_rts import case24_ieee_rts
 def result_sort(basedata,subcasedata):
 	# adjust result branch  keep the same order as before
 	# branch_index = []
+	
 	adjust_branch = []
 	adjust_time = []
 	for i in range(0,len(basedata['branch'])):
-
 		for k in range(0,len(subcasedata['branch'])):
-
 			if subcasedata['branch'][k][0] == basedata['branch'][i][0] and subcasedata['branch'][k][1] == basedata['branch'][i][1]:
 				adjust_time.append(subcasedata['time'][k])
 				adjust_branch.append(subcasedata['branch'][k])
@@ -85,9 +84,9 @@ def branch_attack(casedata, b_start, b_end):
 			break
 	return 
 
-def random_attack(r,casedata,allcase):
+def random_attack(casedata,allcase):
 
-	# r= random.randint(0,len(casedata['branch'])-1)
+	r= random.randint(0,len(casedata['branch'])-1)
 	# print(r,len(casedata['branch']))
 	casedata['branch'] = np.array(np.delete(casedata['branch'],r,0))
 	casedata['time'] = np.delete(casedata['time'],r,0)
@@ -109,6 +108,26 @@ def random_attack(r,casedata,allcase):
 	# 	print( "a:",a['gen']
 
 	# do not process if subbus is null
+
+def num_attack(r,casedata,allcase):
+
+	# r= random.randint(0,len(casedata['branch'])-1)
+	print("mun_attack:",r,len(casedata['branch']))
+	casedata['branch'] = np.array(np.delete(casedata['branch'],r,0))
+	casedata['time'] = np.delete(casedata['time'],r,0)
+	# return casedata
+	# print('random')
+	subbus,subbranch,subtime,subgen = subgraph(casedata)
+
+
+	for i in range(0,len(subbus)):
+		# print(len(subbranch[i]))
+		subcasedata_list = copy.deepcopy(re_dispatch(casedata, subbus[i], subbranch[i], subtime[i], subgen[i], 100000) )# timesolt=1000表示可以瞬间调整
+		# print(len(subcasedata_list))
+		for subcasedata in subcasedata_list:
+			# print(len(subcasedata['gen']))
+			result_sort(casedata,subcasedata)
+			allcase.append(subcasedata)
 
 def judge_failure(branch):
 	#count failure number or something
@@ -133,7 +152,6 @@ def CFS(casedata,allcase):
 
 	result = rundcpf(casedata)
 	
-
 	subcasedata = copy.deepcopy(casedata)
 	subcasedata['bus'] = result[0]['bus']
 	subcasedata['branch'] = result[0]['branch']
@@ -235,7 +253,7 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 		l_sum += b[2]
 
 	# if no load   \\  make sure exist not zero load
-	if l_sum == 0:
+	if l_sum <= 0:
 		return []
 	#find power of G and L bus 
 	g_sum = 0
@@ -271,6 +289,7 @@ def re_dispatch(casedata, bus, branch, time, gen, timeslot):
 			# isin = False
 			# g_sum=round(g_sum,2)
 			# l_sum=round(l_sum,2)
+			# print('in redispatch  g_sum:',g_sum, ' l_sum:',l_sum, ' gap g-l:',g_sum-l_sum)
 			if round(g_sum,2) > round(l_sum,2) and g_sum-g_down_sum > l_sum:  # means at high to low but not enough  so delete gen
 				# isin = True
 				index = 0    # the delete the min g first  
@@ -452,7 +471,7 @@ if __name__ == '__main__':
 	testdata = copy.deepcopy(casedata)
 	allcase = []
 	temp_allcase = []
-	random_attack(26,testdata, allcase)  # 8 11 12
+	num_attack(26,testdata, allcase)  # 8 11 12
 	# print( len(allcase))
 	for a in allcase:
 		CFS(a,temp_allcase)
@@ -463,7 +482,7 @@ if __name__ == '__main__':
 	# print(len(t['branch']))
 	allcase= [] 
 	temp_allcase =[]
-	random_attack(21,t,allcase)
+	num_attack(21,t,allcase)
 	for a in allcase:
 		CFS(a,temp_allcase)
 	allcase = copy.deepcopy(temp_allcase)
